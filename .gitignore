@@ -2,3 +2,15 @@
 .Rhistory
 .RData
 .Ruserdata
+ComBatFamily-dev/.Rbuildignore
+ComBatFamily-dev/.gitattributes
+ComBatFamily-dev/.gitignore
+ComBatFamily-dev/ComBatFamily.Rproj
+ComBatFamily-dev/DESCRIPTION
+ComBatFamily-dev/NAMESPACE
+ComBatFamily-dev/README.md
+ComBatFamily-dev/commit_number.txt
+ComBatFamily-dev/man/
+ComBatFamily-dev/vignettes/
+ComBatFamily-dev/R/wrappers.R
+
