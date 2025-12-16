@@ -1,7 +1,25 @@
 library(xgboost)
 library(dplyr)
 library(ggplot2)
-library(neuroCombat)
+
+# --- Install/load required packages ---
+packages <- c("matrixStats", "Rcpp", "stats", "sva", "mgcv", "gamlss", "quantreg", "lme4")
+for(p in packages){
+  if(!requireNamespace(p, quietly = TRUE)){
+    if(p == "sva"){
+      if(!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+      BiocManager::install("sva")
+    } else {
+      install.packages(p)
+    }
+  }
+  library(p, character.only = TRUE)
+}
+
+# --- Source ComBatFamily dev scripts ---
+r_folder <- "/Users/nevao/R_Projects/ComBatFamily-dev/R/"
+r_files <- list.files(r_folder, pattern = "\\.R$", full.names = TRUE)
+for(f in r_files) source(f)
 
 # --- User-defined functions ---
 
@@ -92,7 +110,6 @@ if (run_xgboost_fit) {
   result <- predict_SA_xgboost(
     X, y, group_vals, sex_vals, target, metric, params,
     run_dummy_quick_fit_xgb, set_xgb_params_man, 
-    show_results_plot = FALSE,
     bootstrap, n_bootstraps
   )
   
