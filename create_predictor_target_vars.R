@@ -17,7 +17,7 @@ create_predictor_target_vars <- function(
   df <- df %>%
     mutate(Site = str_sub(Identifiers, 1, 3))
   
-  # Move Site to be the third column
+  # Move Site to be the second column
   df <- df %>%
     select(1:2, Site, everything(), -Identifiers)
   
@@ -126,16 +126,16 @@ create_predictor_target_vars <- function(
   # Target vector
   y <- df[[target]]
   
-  # if (show_heat_map) {
-  #   plot_title <- paste0("Correlation between regional ", metric)
-  #   corr_matrix <- plot_correlations(X, plot_title)
-  # }
-  # 
-  # if (remove_colinear) {
-  #   X <- remove_collinearity(X, threshold = 0.9)
-  #   plot_title <- "After removing colinear features"
-  #   corr_matrix <- plot_correlations(X, plot_title)
-  # }
+  if (show_heat_map) {
+    plot_title <- paste0("Correlation between regional ", metric)
+    corr_matrix <- plot_correlations(X, plot_title)
+  }
+
+  if (remove_colinear) {
+    X <- remove_collinearity(X, threshold = 0.9)
+    plot_title <- "After removing colinear features"
+    corr_matrix <- plot_correlations(X, plot_title)
+  }
   
   return(list(
     X = X,

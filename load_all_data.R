@@ -120,6 +120,43 @@ load_all_data <- function() {
   #############################
   #### Combine all data ####
   #############################
+
+  #--------Two datasets have duplicate CandIDs. For df_infant_dem_lobe, one of the
+  #--------ID rows is kept because the rows are identical. For df_vsa_dti
+  #--------all of those rows are removed because the same CandID has different data
+  
+  # Get all duplicated CandID values for df_infant_dem_lobe
+  duplicated_ids <- df_infant_dem_lobe$CandID[duplicated(df_infant_dem_lobe$CandID)]
+  # Show unique duplicates
+  unique_dup <- unique(duplicated_ids[!is.na(duplicated_ids)])
+  print(unique_dup)
+  
+  # Remove exact duplicate rows in df_infant_dem_lobe (4 rows)
+  df_infant_dem_lobe <- df_infant_dem_lobe %>%
+    distinct()
+  # Get all duplicated CandID values
+  duplicated_ids <- df_infant_dem_lobe$CandID[duplicated(df_infant_dem_lobe$CandID)]
+  # Show unique duplicates
+  unique_dup <- unique(duplicated_ids[!is.na(duplicated_ids)])
+  print(unique_dup)
+
+  #--------------------------------
+  # Get all duplicated CandID values for df_vsa_dti
+  duplicated_ids <- df_vsa_dti$CandID[duplicated(df_vsa_dti$CandID)]
+  # Show unique duplicates
+  unique_dup <- unique(duplicated_ids[!is.na(duplicated_ids)])
+  print(unique_dup)
+
+  # Remove 38 subjects with duplicate CandIDs in df_vsa_dti (row values not identical)
+  df_vsa_dti <- df_vsa_dti %>%
+    filter(!CandID %in% unique_dup)
+  # Get all duplicated CandID values
+  duplicated_ids <- df_vsa_dti$CandID[duplicated(df_vsa_dti$CandID)]
+  # Show unique duplicates
+  unique_dup <- unique(duplicated_ids[!is.na(duplicated_ids)])
+  print(unique_dup)
+  
+  #---------------Now combine all dataframes
   
   dfs_list <- list(
     df_infant_dem_lobe,
@@ -174,13 +211,13 @@ load_all_data <- function() {
   #### Normalize by total tissue ####
   #############################
   
-  df_all_brain_behav <- df_all_brain_behav %>%
-    divide_columns_by_tottiss(df_infant_dem_lobe, "V12") %>%
-    divide_columns_by_tottiss(df_infant_dem_lobe, "V24") %>%
-    divide_columns_by_tottiss(df_vsa_lobe, "VSA") %>%
-    divide_columns_by_tottiss(df_infant_subcort, "v12") %>%
-    divide_columns_by_tottiss(df_infant_subcort, "v24") %>%
-    divide_columns_by_tottiss(df_vsa_subcort, "VSA")
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_infant_dem_lobe, "V12")
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_infant_dem_lobe, "V24") 
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_vsa_lobe, "VSA") 
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_infant_subcort, "v12") 
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_infant_subcort, "v24") 
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_vsa_subcort, "VSA")
+  df_all_brain_behav <- divide_columns_by_tottiss(df_all_brain_behav, df_vsa_sa, "VSA")
   
   #############################
   #### Drop tissue / ICV columns ####

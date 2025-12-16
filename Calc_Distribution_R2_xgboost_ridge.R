@@ -11,18 +11,19 @@ source("predict_SA_xgboost.R")
 source("UtilityFunctions.R")
 source("load_brain_data.R")
 
-debug(load_all_data)
-debug(create_predictor_target_vars)
+#debug(load_all_data)
+# debug(create_predictor_target_vars)
 debug(predict_SA_xgboost)
-debug(reshape_dataframe)
-debug(load_infant_subcortical_data)
-debug(load_vsa_subcortical_data)
-debug(load_vsa_ct_sa_data)
-debug(load_and_clean_vsa_dti_data)
+# debug(reshape_dataframe)
+# debug(load_infant_subcortical_data)
+# debug(load_vsa_subcortical_data)
+# debug(load_vsa_ct_sa_data)
+# debug(load_and_clean_vsa_dti_data)
+# debug(divide_columns_by_tottiss)
 # debug(load_and_clean_infant_volume_data_and_all_behavior)
-debug(load_and_clean_vsa_volume_data)
-debug(plot_correlations)
-debug(remove_collinearity)
+# debug(load_and_clean_vsa_volume_data)
+# debug(plot_correlations)
+# debug(remove_collinearity)
 debug(write_modeling_data_and_outcome_to_file)
 debug(plot_xgb_actual_vs_pred)
 debug(generate_bootstrap_indices)
@@ -39,9 +40,9 @@ metric <- "subcort_infant"
 include_group <- 0
 bootstrap <- TRUE
 n_bootstraps <- 100
-show_heat_map <- FALSE
+show_heat_map <- TRUE
 remove_colinear <- FALSE
-run_dummy_quick_fit_xgb <- FALSE
+run_dummy_quick_fit_xgb <- TRUE
 alpha <- 0.05
 
 run_ridge_regression_fit <- FALSE
@@ -88,7 +89,7 @@ cat(sprintf("Running with target = %s, metric = %s, include_group = %d, quick fi
 
 # ---- Run XGBoost ----
 if (run_xgboost_fit) {
-  result <- predict_SA_xgboost_covbat(
+  result <- predict_SA_xgboost(
     X, y, group_vals, sex_vals, target, metric, params,
     run_dummy_quick_fit_xgb, set_xgb_params_man, 
     show_results_plot = FALSE,

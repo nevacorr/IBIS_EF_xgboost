@@ -5,36 +5,38 @@ library(purrr)
 library(readr)
 
 reshape_dataframe <- function(df) {
+  
+  # Drop Combined_ID
   df <- df %>% select(-Combined_ID)
   
+  # Identify region columns to pivot
   region_columns <- names(df)[
     !str_detect(names(df), "_VQC|_ExcludeReason|Edited") &
       !names(df) %in% c("DCCID", "Visit")
   ]
   
-  df_pivot <- df %>%
+  # Pivot: make separate columns for each Visit
+  df_long <- df %>%
     pivot_longer(
       cols = all_of(region_columns),
       names_to = "region",
       values_to = "value"
-    ) %>%
+    )
+  
+  # Make a temporary column for Visit with lowercase "v"
+  df_long <- df_long %>%
+    mutate(Visit_lower = sub("^V", "v", Visit))
+  
+  df_wide <- df_long %>%
+    select(DCCID, Visit_lower, region, value) %>%  # drop VQC/ExcludeReason
     pivot_wider(
       id_cols = DCCID,
-      names_from = Visit,
-      values_from = value
-    )
+      names_from = c(region, Visit_lower),
+      values_from = value,
+      names_sep="_"
+    ) 
   
-  colnames(df_pivot) <- ifelse(
-    colnames(df_pivot) == "DCCID",
-    "DCCID",
-    paste0(
-      str_extract(colnames(df_pivot), "^[^_]+"),
-      "_",
-      tolower(str_extract(colnames(df_pivot), "(?<=_).+"))
-    )
-  )
-  
-  return(df_pivot)
+  return(df_wide)
 }
 
 load_infant_subcortical_data <- function(filepath) {
@@ -43,51 +45,49 @@ load_infant_subcortical_data <- function(filepath) {
   csv_files <- list.files(filepath, pattern = "\\.csv$", full.names = TRUE)
   csv_files <- csv_files[!str_detect(csv_files, "LobeParcel")]
   
-  # Load each CSV into a named list, using regex to extract a key
-  dfs <- map(csv_files, function(file) {
+  # Load CSVs into a named list of data frames
+  dfs <- list()
+  for (file in csv_files) {
     fname <- basename(file)
     match <- str_match(fname, "IBIS_v3\\.13_([^_]+)")
     key <- if (!is.na(match[2])) match[2] else fname
     df <- read_csv(file, show_col_types = FALSE)
-    list(key = key, df = df)
-  })
+    
+    # Reshape each dataframe
+    dfs[[key]] <- reshape_dataframe(df)
+  }
   
-  # Convert list of lists into named list of data frames
-  dfs <- set_names(map(dfs, "df"), map_chr(dfs, "key"))
+  # Exclude "ICV" from merging
+  dfs_to_merge <- dfs[names(dfs) != "ICV"]
   
-  # Apply reshape function to each data frame
-  dfs_transformed <- map(dfs, reshape_dataframe)
-  
-  # Exclude the 'ICV' data frame from merging
-  dfs_to_merge <- dfs_transformed[names(dfs_transformed) != "ICV"]
-  
-  # Merge all data frames by DCCID
+  # Merge all dataframes by DCCID
   subcort_merged_df <- reduce(dfs_to_merge, full_join, by = "DCCID")
   
   # Remove columns containing "Edited"
-  subcort_merged_df <- subcort_merged_df %>%
-    select(-matches("Edited"))
+  subcort_merged_df <- subcort_merged_df %>% select(-matches("Edited"))
+  # 
+  # # Normalize _v12 columns by totTiss_v12
+  # if ("totTiss_v12" %in% names(subcort_merged_df)) {
+  #   v12_cols <- names(subcort_merged_df)[str_detect(names(subcort_merged_df), "_v12") & 
+  #                                          !str_detect(names(subcort_merged_df), "totTiss")]
+  #   subcort_merged_df <- subcort_merged_df %>%
+  #     mutate(across(all_of(v12_cols), ~ .x / totTiss_v12))
+  # }
+  # 
+  # # Normalize _v24 columns by totTiss_v24
+  # if ("totTiss_v24" %in% names(subcort_merged_df)) {
+  #   v24_cols <- names(subcort_merged_df)[str_detect(names(subcort_merged_df), "_v24") & 
+  #                                          !str_detect(names(subcort_merged_df), "totTiss")]
+  #   subcort_merged_df <- subcort_merged_df %>%
+  #     mutate(across(all_of(v24_cols), ~ .x / totTiss_v24))
+  # }
   
-  # Normalize _v12 columns by totTiss_v12
-  v12_cols <- names(subcort_merged_df)[
-    str_detect(names(subcort_merged_df), "_v12") &
-      !str_detect(names(subcort_merged_df), "totTiss")
-  ]
+  # Drop totTiss columns 
   subcort_merged_df <- subcort_merged_df %>%
-    mutate(across(all_of(v12_cols), ~ .x / totTiss_v12))
+    select(-any_of(c("totTiss_v12", "totTiss_v24")))
   
-  # Normalize _v24 columns by totTiss_v24
-  v24_cols <- names(subcort_merged_df)[
-    str_detect(names(subcort_merged_df), "_v24") &
-      !str_detect(names(subcort_merged_df), "totTiss")
-  ]
-  subcort_merged_df <- subcort_merged_df %>%
-    mutate(across(all_of(v24_cols), ~ .x / totTiss_v24))
-  
-  # Drop totTiss columns
-  subcort_merged_df <- subcort_merged_df %>%
-    select(-totTiss_v12, -totTiss_v24) %>%
-    rename(CandID = DCCID)
+  # Rename DCCID to CandID
+  subcort_merged_df <- subcort_merged_df %>% rename(CandID = DCCID)
   
   return(subcort_merged_df)
 }
@@ -101,7 +101,8 @@ load_vsa_subcortical_data <- function(filepath, datafilename) {
     "Visit", "Septum", "Ventricle"
   )
   
-  # Corrected select using any_of with negative indexing
+  # Remove columns in unwanted substrings, replace . with Nan and convert
+  #values to numeric
   df <- df %>%
     select(-any_of(names(df)[str_detect(names(df), paste(unwanted_substrings, collapse = "|"))])) %>%
     mutate(across(where(is.character), ~ na_if(.x, "."))) %>%
@@ -121,16 +122,11 @@ load_vsa_ct_sa_data <- function(filepath, datafilename, datastr) {
   # Define unwanted substrings
   unwanted_substrings <- c("Visit")
   
-  # Keep only columns that do NOT contain any unwanted substring
+  # Remove columns containing any of the unwanted substrings, convert '.' to 
+  # NA and convert character columns to numeric
   df <- df %>%
-    select(!matches(paste(unwanted_substrings, collapse = "|")))
-  
-  # Replace '.' with NA
-  df <- df %>%
-    mutate(across(everything(), ~ na_if(.x, ".")))
-  
-  # Convert character columns to numeric if possible
-  df <- df %>%
+    select(-any_of(names(df)[str_detect(names(df), paste(unwanted_substrings, collapse = "|"))])) %>%
+    mutate(across(where(is.character), ~ na_if(.x, "."))) %>%
     mutate(across(where(is.character), as.numeric))
   
   # Rename columns except CandID
@@ -156,8 +152,15 @@ load_and_clean_vsa_dti_data <- function(dir, datafilename) {
   
   # Replace '.' and empty strings with NA
   dti_df <- dti_df %>%
-    mutate(across(everything(), ~ na_if(.x, "."))) %>%
-    mutate(across(everything(), ~ na_if(.x, "")))
+    mutate(across(
+      where(is.character),
+        ~ {
+          x <- na_if(.x, ".")
+          x <- na_if(x, "")
+          as.numeric(x)
+        }
+      )
+    )
   
   # Convert all non-CandID columns to numeric
   dti_df <- dti_df %>%

@@ -7,12 +7,16 @@ library(gridExtra)
 
 plot_correlations <- function(df, title) {
   
-  corr_matrix <- cor(df, use = "pairwise.complete.obs")
+  df_corr <- df %>%
+    dplyr::select(-any_of(c("Site", "Sex", "Group")))  # drop if present
+  
+  corr_matrix <- cor(df_corr, use = "pairwise.complete.obs")
   
   corr_df <- as.data.frame(as.table(corr_matrix))
   colnames(corr_df) <- c("Var1", "Var2", "Correlation")
   
-  ggplot(corr_df, aes(Var1, Var2, fill = Correlation)) +
+  print(
+    ggplot(corr_df, aes(Var1, Var2, fill = Correlation)) +
     geom_tile() +
     scale_fill_gradient2(
       low = "blue", mid = "white", high = "red",
@@ -25,11 +29,15 @@ plot_correlations <- function(df, title) {
       plot.title = element_text(hjust = 0.5)
     ) +
     labs(title = title, x = NULL, y = NULL)
+  )
 }
 
 remove_collinearity <- function(df, threshold = 0.9) {
   
-  corr_matrix <- abs(cor(df, use = "pairwise.complete.obs"))
+  df_corr <- df %>%
+    dplyr::select(-any_of(c("Site", "Sex", "Group")))  # drop if present
+  
+  corr_matrix <- abs(cor(df_corr, use = "pairwise.complete.obs"))
   
   upper_triangle <- corr_matrix
   upper_triangle[lower.tri(upper_triangle, diag = TRUE)] <- NA
@@ -39,6 +47,9 @@ remove_collinearity <- function(df, threshold = 0.9) {
   ]
   
   df_reduced <- df %>% select(-all_of(to_drop))
+  
+  message("Dropped columns due to collinearity: ", paste(to_drop, collapse=", "))
+  
   return(df_reduced)
 }
 
@@ -237,4 +248,48 @@ aggregate_feature_importances <- function(
   }
   
   return(importance_df)
+}
+
+divide_columns_by_tottiss <- function(df_all_brain_behav, df, mystr) {
+  
+  suffix <- paste0("_", mystr)
+  
+  if (mystr == "VSA") {
+    tot_col <- paste0("total_Tissue_vol_", toupper(mystr))
+    icv_col <- paste0("ICV_vol_", toupper(mystr))
+  } else {
+    tot_col <- paste0("totTiss_", toupper(mystr))
+    icv_col <- paste0("ICV_", toupper(mystr))
+  }
+  
+  # Safety check
+  if (!tot_col %in% names(df_all_brain_behav)) {
+    stop(
+      sprintf(
+        "Cannot divide by totTiss. Column '%s' not found in df_all_brain_behav.",
+        tot_col
+      ),
+      call. = FALSE
+    )
+  }
+  
+  # Find shared columns ending in _mystr (excluding CandID)
+  shared_cols <- intersect(names(df), names(df_all_brain_behav))
+  
+  shared_cols <- shared_cols[
+    shared_cols != "CandID" &
+      endsWith(shared_cols, suffix)
+  ]
+  
+  # Remove totTiss and ICV columns
+  shared_cols <- setdiff(shared_cols, c(tot_col, icv_col))
+  
+  # Perform division
+  df_all_brain_behav <- df_all_brain_behav %>%
+    mutate(across(
+      all_of(shared_cols),
+      ~ .x / .data[[tot_col]]
+    ))
+  
+  return(df_all_brain_behav)
 }
