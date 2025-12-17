@@ -17,7 +17,7 @@ for(p in packages){
 }
 
 # --- Source ComBatFamily dev scripts ---
-r_folder <- "/Users/nevao/R_Projects/ComBatFamily-dev/R/"
+r_folder <- "/Users/nevao/R_Projects/IBIS_EF_xgboost/ComBatFamily-dev/R/"
 r_files <- list.files(r_folder, pattern = "\\.R$", full.names = TRUE)
 for(f in r_files) source(f)
 
@@ -28,10 +28,11 @@ source("create_predictor_target_vars.R")
 source("predict_SA_xgboost.R") 
 source("UtilityFunctions.R")
 source("load_brain_data.R")
+source("ComBatFamily-dev/R/covfam_edited.R")
 
 #debug(load_all_data)
 # debug(create_predictor_target_vars)
-debug(predict_SA_xgboost)
+# debug(predict_SA_xgboost)
 # debug(reshape_dataframe)
 # debug(load_infant_subcortical_data)
 # debug(load_vsa_subcortical_data)
@@ -42,12 +43,13 @@ debug(predict_SA_xgboost)
 # debug(load_and_clean_vsa_volume_data)
 # debug(plot_correlations)
 # debug(remove_collinearity)
-debug(write_modeling_data_and_outcome_to_file)
-debug(plot_xgb_actual_vs_pred)
-debug(generate_bootstrap_indices)
-debug(calculate_percentile)
-debug(plot_r2_distribution)
-debug(aggregate_feature_importances)
+# debug(impute_median_by_site)
+# debug(write_modeling_data_and_outcome_to_file)
+# debug(plot_xgb_actual_vs_pred)
+# debug(generate_bootstrap_indices)
+# debug(calculate_percentile)
+# debug(plot_r2_distribution)
+# debug(aggregate_feature_importances)
 
 
 # ---- Parameters ----
@@ -60,7 +62,7 @@ bootstrap <- TRUE
 n_bootstraps <- 100
 show_heat_map <- TRUE
 remove_colinear <- FALSE
-run_dummy_quick_fit_xgb <- TRUE
+run_dummy_quick_fit_xgb <- FALSE
 alpha <- 0.05
 
 run_ridge_regression_fit <- FALSE
@@ -108,9 +110,7 @@ cat(sprintf("Running with target = %s, metric = %s, include_group = %d, quick fi
 # ---- Run XGBoost ----
 if (run_xgboost_fit) {
   result <- predict_SA_xgboost(
-    X, y, group_vals, sex_vals, target, metric, params,
-    run_dummy_quick_fit_xgb, set_xgb_params_man, 
-    bootstrap, n_bootstraps
+    X, y, params,run_dummy_quick_fit_xgb, set_xgb_params_man,bootstrap, n_bootstraps
   )
   
   r2_test_array_xgb <- result$r2_test_array
