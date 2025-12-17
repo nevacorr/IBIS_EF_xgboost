@@ -5,6 +5,19 @@ library(readr)
 library(stringr)
 library(gridExtra)
 
+# Function: median imputation per column, grouped by Site
+impute_median_by_site <- function(df, site_col = "Site", exclude_cols = c("Sex")) {
+  feature_cols <- setdiff(colnames(df), c(site_col, exclude_cols))
+  
+  df_imputed <- df %>%
+    group_by(across(all_of(site_col))) %>%
+    mutate(across(all_of(feature_cols),
+                  ~ ifelse(is.na(.x), median(.x, na.rm = TRUE), .x))) %>%
+    ungroup()
+  
+  return(df_imputed)
+}
+
 plot_correlations <- function(df, title) {
   
   df_corr <- df %>%
