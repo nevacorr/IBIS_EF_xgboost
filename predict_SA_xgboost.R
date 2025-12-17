@@ -1,12 +1,11 @@
 library(xgboost)
 library(dplyr)
 library(tidyr)
-library(neuroCombat)
 library(caret)
 library(parallel)
 library(iml)
 
-predict_SA_xgboost <- function(X, y, group_vals, sex_vals, target, metric, params,
+predict_SA_xgboost <- function(X, y, params,
                                run_dummy_quick_fit = FALSE,
                                set_params_man = TRUE,
                                bootstrap = TRUE,
@@ -19,6 +18,9 @@ predict_SA_xgboost <- function(X, y, group_vals, sex_vals, target, metric, param
   feature_importance_list <- list()
   
   for (b in 1:n_bootstraps) {
+    
+    cat(sprintf("\rBootstrap %d of %d", b, n_bootstraps))
+    
     # Initialize predictions and counts
     train_predictions <- rep(0, length(y))
     test_predictions <- rep(0, length(y))
@@ -45,19 +47,63 @@ predict_SA_xgboost <- function(X, y, group_vals, sex_vals, target, metric, param
         y_train_boot <- y_train
       }
       
-      # NeuroCombat harmonization
-      batch_train <- as.factor(X_train_boot$Site)
-      batch_test <- factor(X_test$Site, levels = levels(batch_train))
+      # Record locations of nans
+      na_mask_train <- is.na(X_train_boot%>% select(-Site))
+      na_mask_test  <- is.na(X_test%>% select(-Site))
       
-      X_train_harmonized <- neuroCombat(dat = t(as.matrix(X_train_boot %>% select(-Site, -Sex))),
-                                        batch = batch_train)$dat.combat
-      X_test_harmonized <- neuroCombat(dat = t(as.matrix(X_test %>% select(-Site, -Sex))),
-                                       batch = batch_test,
-                                       mod = NULL)$dat.combat
+      # Perform median imputation by site for every column of train set
+      X_train_imputed <- impute_median_by_site(X_train_boot, site_col="Site")
       
-      # Add Sex back
-      X_train_harmonized <- cbind(Sex = X_train_boot$Sex, t(X_train_harmonized))
-      X_test_harmonized <- cbind(Sex = X_test$Sex, t(X_test_harmonized))
+      feature_cols <- setdiff(
+        names(X_train_boot),
+        c("Site", "Sex")
+      )
+      
+      # Apply train median per site to test data
+      train_site_medians <- X_train_boot %>%
+        group_by(Site) %>%
+        summarise(
+          across(all_of(feature_cols), ~ median(.x, na.rm = TRUE)),
+          .groups = "drop"
+        )
+      X_test_imputed <- X_test
+      
+      for (col in feature_cols) {
+        X_test_imputed[[col]] <- ifelse(
+          is.na(X_test_imputed[[col]]),
+          train_site_medians[[col]][match(X_test_imputed$Site, train_site_medians$Site)],
+          X_test_imputed[[col]]
+        )
+      }
+      
+      # Perform covbat harmonization
+      
+      batch_train <- as.factor(X_train_imputed$Site)
+      batch_test <- factor(X_test_imputed$Site, levels = levels(batch_train))
+      
+      train_features <- X_train_imputed %>% select(-Site, -Sex)
+      test_features <- X_test_imputed %>% select(-Site, -Sex)
+      
+      covbat_fit <- covfam_edited(
+        data = train_features,
+        bat = batch_train,
+        robust.LS = FALSE,    # set explicitly
+      )
+      test_corrected <- predict(covbat_fit, test_features, batch_test)
+      
+      # Add sex back into final harmonized dataframe
+      X_train_harmonized <- cbind(Sex = X_train_imputed$Sex, covbat_fit$dat.covbat)
+      X_test_harmonized  <- cbind(Sex = X_test_imputed$Sex, test_corrected$dat.covbat)
+      
+      stopifnot(identical(colnames(X_train_harmonized),
+                          colnames(na_mask_train)))
+      
+      stopifnot(identical(colnames(X_test_harmonized),
+                          colnames(na_mask_test)))
+      
+      # Restore Nans in data
+      X_train_harmonized[na_mask_train] <- NA
+      X_test_harmonized[na_mask_test]   <- NA
       
       # Convert to DMatrix
       dtrain <- xgb.DMatrix(data = as.matrix(X_train_harmonized), label = y_train_boot)
